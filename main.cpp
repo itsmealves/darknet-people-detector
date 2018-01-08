@@ -1,12 +1,14 @@
 // Brief Sample of using OpenCV dnn module in real time with device capture, video and image.
 // VIDEO DEMO: https://www.youtube.com/watch?v=NHtRlndE2cg
 
-#include <opencv2/dnn.hpp>
-#include <opencv2/dnn/shape_utils.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
 #include <fstream>
 #include <iostream>
+#include <unistd.h>
+#include <pthread.h>
+#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/dnn/shape_utils.hpp>
 
 #define PERSON_CLASS 14
 
@@ -30,8 +32,13 @@ static const char* params =
                 "{ min_confidence | 0.24  | min confidence      }"
                 "{ class_names    |       | File with class names, [PATH-TO-DARKNET]/data/coco.names }";
 
+bool hardware_flag = true;
+
+void *hardware_worker(void *data);
+
 int main(int argc, char** argv)
 {
+    pthread_t t1;
     CommandLineParser parser(argc, argv, params);
 
     if (parser.get<bool>("help"))
@@ -63,6 +70,9 @@ int main(int argc, char** argv)
     {
         int cameraDevice = parser.get<int>("camera_device");
         cap = VideoCapture(cameraDevice);
+        cap.set(CV_CAP_PROP_FRAME_WIDTH , 320);
+        cap.set(CV_CAP_PROP_FRAME_HEIGHT , 240);
+
         if(!cap.isOpened())
         {
             cout << "Couldn't find camera: " << cameraDevice << endl;
@@ -90,15 +100,12 @@ int main(int argc, char** argv)
 
     String object_roi_style = parser.get<String>("style");
 
-    for(;;)
-    {
+    for(;;) {
+
         Mat frame;
         cap >> frame; // get a new frame from camera/video or read image
 
-        resize(frame, frame, Size(320, 280));
-
-        if (frame.empty())
-        {
+        if (frame.empty()) {
             waitKey();
             break;
         }
@@ -107,7 +114,8 @@ int main(int argc, char** argv)
             cvtColor(frame, frame, COLOR_BGRA2BGR);
 
         //! [Prepare blob]
-        Mat inputBlob = blobFromImage(frame, 1 / 255.F, Size(320, 280), Scalar(), true, false); //Convert Mat to batch of images
+        Mat inputBlob = blobFromImage(frame, 1 / 255.F, Size(320, 240), Scalar(), true,
+                                      false); //Convert Mat to batch of images
         //! [Prepare blob]
 
         //! [Set input blob]
@@ -124,18 +132,18 @@ int main(int argc, char** argv)
         putText(frame, format("FPS: %.2f ; time: %.2f ms", 1000.f / time_ms, time_ms),
                 Point(20, 20), 0, 0.5, Scalar(0, 0, 255));
 
+        putText(frame, "Press ESC to quit", Point(20, 220), 0, 0.5, Scalar(0, 0, 255));
+
         float confidenceThreshold = parser.get<float>("min_confidence");
-        for (int i = 0; i < detectionMat.rows; i++)
-        {
+        for (int i = 0; i < detectionMat.rows; i++) {
             const int probability_index = 5;
             const int probability_size = detectionMat.cols - probability_index;
             float *prob_array_ptr = &detectionMat.at<float>(i, probability_index);
 
             size_t objectClass = max_element(prob_array_ptr, prob_array_ptr + probability_size) - prob_array_ptr;
-            float confidence = detectionMat.at<float>(i, (int)objectClass + probability_index);
+            float confidence = detectionMat.at<float>(i, (int) objectClass + probability_index);
 
-            if (objectClass == PERSON_CLASS && confidence > confidenceThreshold)
-            {
+            if (objectClass == PERSON_CLASS && confidence > confidenceThreshold) {
                 float x_center = detectionMat.at<float>(i, 0) * frame.cols;
                 float y_center = detectionMat.at<float>(i, 1) * frame.rows;
                 float width = detectionMat.at<float>(i, 2) * frame.cols;
@@ -144,14 +152,13 @@ int main(int argc, char** argv)
                 Point p2(cvRound(x_center + width / 2), cvRound(y_center + height / 2));
                 Rect object(p1, p2);
 
+                cout << "Width: " << width << "\t" << "Height: " << height << endl;
+
                 Scalar object_roi_color(0, 255, 0);
 
-                if (object_roi_style == "box")
-                {
+                if (object_roi_style == "box") {
                     rectangle(frame, object, object_roi_color);
-                }
-                else
-                {
+                } else {
                     Point p_center(cvRound(x_center), cvRound(y_center));
                     line(frame, object.tl(), p_center, object_roi_color, 1);
                 }
@@ -166,13 +173,30 @@ int main(int argc, char** argv)
                 rectangle(frame, Rect(p1, Size(labelSize.width, labelSize.height + baseLine)),
                           object_roi_color, CV_FILLED);
                 putText(frame, label, p1 + Point(0, labelSize.height),
-                        FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,0,0));
+                        FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 0));
+
+                if (hardware_flag) {
+                    hardware_flag = false;
+                    pthread_create(&t1, NULL, hardware_worker, NULL);
+                }
             }
         }
 
-        imshow("YOLO: Detections", frame);
-        if (waitKey(1) >= 0) break;
+        imshow("L2: People detection", frame);
+        if (waitKey(1) == 27) break;
     }
+
+    cap.release();
+    destroyAllWindows();
+    if(!hardware_flag) pthread_join(t1, NULL);
 
     return 0;
 } // main
+
+void *hardware_worker(void *data)
+{
+    cout << "hue" << endl;
+    sleep(10);
+    cout << "Done" << endl;
+    hardware_flag = true;
+}

@@ -11,6 +11,8 @@
 #include <opencv2/dnn/shape_utils.hpp>
 
 #define PERSON_CLASS 14
+#define SLEEP_TIME 5
+#define DEBUG 1
 
 using namespace std;
 using namespace cv;
@@ -70,6 +72,7 @@ int main(int argc, char** argv)
     {
         int cameraDevice = parser.get<int>("camera_device");
         cap = VideoCapture(cameraDevice);
+
         cap.set(CV_CAP_PROP_FRAME_WIDTH , 320);
         cap.set(CV_CAP_PROP_FRAME_HEIGHT , 240);
 
@@ -151,8 +154,9 @@ int main(int argc, char** argv)
                 Point p1(cvRound(x_center - width / 2), cvRound(y_center - height / 2));
                 Point p2(cvRound(x_center + width / 2), cvRound(y_center + height / 2));
                 Rect object(p1, p2);
-
+#if DEBUG
                 cout << "Width: " << width << "\t" << "Height: " << height << endl;
+#endif
 
                 Scalar object_roi_color(0, 255, 0);
 
@@ -195,8 +199,22 @@ int main(int argc, char** argv)
 
 void *hardware_worker(void *data)
 {
-    cout << "hue" << endl;
-    sleep(10);
-    cout << "Done" << endl;
+#if DEBUG
+    cout << "**********************" << endl;
+    cout << "Starting hardware work" << endl;
+    cout << "**********************" << endl;
+#endif
+    sleep(5);
+#if DEBUG
+    cout << "*******************" << endl;
+    cout << "Entering sleep time" << endl;
+    cout << "*******************" << endl;
+#endif
+    sleep(SLEEP_TIME);
+#if DEBUG
+    cout << "*****" << endl;
+    cout << "Done!" << endl;
+    cout << "*****" << endl;
+#endif
     hardware_flag = true;
 }

@@ -5,6 +5,8 @@
 #include <iostream>
 #include <unistd.h>
 #include <pthread.h>
+#include "include/firmata.h"
+#include "include/firmserial.h"
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
@@ -35,6 +37,9 @@ static const char* params =
                 "{ class_names    |       | File with class names, [PATH-TO-DARKNET]/data/coco.names }";
 
 bool hardware_flag = true;
+vector<firmata::PortInfo> ports = firmata::FirmSerial::listPorts();
+firmata::Firmata<firmata::Base, firmata::I2C>* f = NULL;
+firmata::FirmSerial* serialio;
 
 void *hardware_worker(void *data);
 
@@ -42,6 +47,41 @@ int main(int argc, char** argv)
 {
     pthread_t t1;
     CommandLineParser parser(argc, argv, params);
+
+    for (auto port : ports) {
+        std::cout << port.port << std::endl;
+
+        if (f != NULL) {
+            delete f;
+            f = NULL;
+        }
+
+        if(port.port.find("ACM") == std::string::npos) continue;
+
+        try {
+            serialio = new firmata::FirmSerial(port.port.c_str());
+
+            if (serialio->available()) {
+                sleep(3); // Seems necessary on linux
+                f = new firmata::Firmata<firmata::Base, firmata::I2C>(serialio);
+                sleep(1);
+            }
+        }
+        catch(firmata::IOException e) {
+            std::cout << e.what() << std::endl;
+        }
+        catch(firmata::NotOpenException e) {
+            std::cout << e.what() << std::endl;
+        }
+        if (f != NULL && f->ready()) {
+            break;
+        }
+    }
+
+    if (f == NULL || !f->ready()) {
+        cout << "Erro. Primeiramente, conecte o dispositivo numa porta USB e tente novamente." << endl;
+        return 1;
+    }
 
     if (parser.get<bool>("help"))
     {
@@ -136,6 +176,8 @@ int main(int argc, char** argv)
                 Point(20, 20), 0, 0.5, Scalar(0, 0, 255));
 
         putText(frame, "Press ESC to quit", Point(20, 220), 0, 0.5, Scalar(0, 0, 255));
+        if(!hardware_flag)
+            putText(frame, "Hardware working!", Point(20,200), 0, 0.5, Scalar(0, 0, 255));
 
         float confidenceThreshold = parser.get<float>("min_confidence");
         for (int i = 0; i < detectionMat.rows; i++) {
@@ -188,6 +230,13 @@ int main(int argc, char** argv)
 
         imshow("L2: People detection", frame);
         if (waitKey(1) == 27) break;
+        if (f == NULL || !f->ready()) break;
+    }
+
+    if(f != NULL)
+    {
+        delete f;
+        f = NULL;
     }
 
     cap.release();
@@ -199,22 +248,33 @@ int main(int argc, char** argv)
 
 void *hardware_worker(void *data)
 {
-#if DEBUG
-    cout << "**********************" << endl;
-    cout << "Starting hardware work" << endl;
-    cout << "**********************" << endl;
-#endif
-    sleep(5);
-#if DEBUG
-    cout << "*******************" << endl;
-    cout << "Entering sleep time" << endl;
-    cout << "*******************" << endl;
-#endif
+    try {
+        f->setSamplingInterval(100);
+
+        //std::cout << f->name << std::endl;
+        //std::cout << f->major_version << std::endl;
+        //std::cout << f->minor_version << std::endl;
+
+        f->pinMode(13, MODE_OUTPUT);
+
+        for(int i = 0; i < 6; i++) {
+            f->parse();
+            int a0 = f->digitalRead(13);
+            f->digitalWrite(13, a0? LOW : HIGH);
+            sleep(1);
+        };
+    }
+    catch (firmata::IOException e) {
+        std::cout << e.what() << std::endl;
+        delete f;
+        f = NULL;
+    }
+    catch (firmata::NotOpenException e) {
+        std::cout << e.what() << std::endl;
+        delete f;
+        f = NULL;
+    }
+
     sleep(SLEEP_TIME);
-#if DEBUG
-    cout << "*****" << endl;
-    cout << "Done!" << endl;
-    cout << "*****" << endl;
-#endif
     hardware_flag = true;
 }

@@ -33,7 +33,7 @@ static const char* params =
                 "{ camera_device  | 0     | camera device number}"
                 "{ source         |       | video or image for detection}"
                 "{ style          | box   | box or line style draw }"
-                "{ min_confidence | 0.24  | min confidence      }"
+                "{ min_confidence | 0.6   | min confidence      }"
                 "{ class_names    |       | File with class names, [PATH-TO-DARKNET]/data/coco.names }";
 
 bool hardware_flag = true;
@@ -49,14 +49,13 @@ int main(int argc, char** argv)
     CommandLineParser parser(argc, argv, params);
 
     for (auto port : ports) {
-        std::cout << port.port << std::endl;
-
         if (f != NULL) {
             delete f;
             f = NULL;
         }
 
         if(port.port.find("ACM") == std::string::npos) continue;
+        std::cout << port.port << std::endl;
 
         try {
             serialio = new firmata::FirmSerial(port.port.c_str());
@@ -172,12 +171,15 @@ int main(int argc, char** argv)
         vector<double> layersTimings;
         double tick_freq = getTickFrequency();
         double time_ms = net.getPerfProfile(layersTimings) / tick_freq * 1000;
-        putText(frame, format("FPS: %.2f ; time: %.2f ms", 1000.f / time_ms, time_ms),
+        putText(frame, format("FPS: %.2f ; Tempo: %.2f ms", 1000.f / time_ms, time_ms),
                 Point(20, 20), 0, 0.5, Scalar(0, 0, 255));
 
-        putText(frame, "Press ESC to quit", Point(20, 220), 0, 0.5, Scalar(0, 0, 255));
+        putText(frame, "Pressione ESC para sair", Point(20, 200), 0, 0.5, Scalar(0, 0, 255));
         if(!hardware_flag)
-            putText(frame, "Hardware working!", Point(20,200), 0, 0.5, Scalar(0, 0, 255));
+            putText(frame, "Dispositivo ocupado!", Point(20,220), 0, 0.5, Scalar(0, 0, 255));
+        else
+            putText(frame, "Pronto para realizar o procedimento!", Point(20,220), 0, 0.5, Scalar(0, 0, 255));
+
 
         float confidenceThreshold = parser.get<float>("min_confidence");
         for (int i = 0; i < detectionMat.rows; i++) {

@@ -5,8 +5,6 @@
 #include <iostream>
 #include <unistd.h>
 #include <pthread.h>
-#include "include/firmata.h"
-#include "include/firmserial.h"
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
@@ -14,7 +12,6 @@
 
 #define PERSON_CLASS 14
 #define SLEEP_TIME 5
-#define DEBUG 1
 
 using namespace std;
 using namespace cv;
@@ -33,54 +30,17 @@ static const char* params =
                 "{ camera_device  | 0     | camera device number}"
                 "{ source         |       | video or image for detection}"
                 "{ style          | box   | box or line style draw }"
-                "{ min_confidence | 0.6   | min confidence      }"
+                "{ min_confidence | 0.4   | min confidence      }"
                 "{ class_names    |       | File with class names, [PATH-TO-DARKNET]/data/coco.names }";
 
-bool hardware_flag = true;
-vector<firmata::PortInfo> ports = firmata::FirmSerial::listPorts();
-firmata::Firmata<firmata::Base, firmata::I2C>* f = NULL;
-firmata::FirmSerial* serialio;
 
+bool hardware_flag = true;
 void *hardware_worker(void *data);
 
 int main(int argc, char** argv)
 {
     pthread_t t1;
     CommandLineParser parser(argc, argv, params);
-
-    for (auto port : ports) {
-        if (f != NULL) {
-            delete f;
-            f = NULL;
-        }
-
-        if(port.port.find("ACM") == std::string::npos) continue;
-        std::cout << port.port << std::endl;
-
-        try {
-            serialio = new firmata::FirmSerial(port.port.c_str());
-
-            if (serialio->available()) {
-                sleep(3); // Seems necessary on linux
-                f = new firmata::Firmata<firmata::Base, firmata::I2C>(serialio);
-                sleep(1);
-            }
-        }
-        catch(firmata::IOException e) {
-            std::cout << e.what() << std::endl;
-        }
-        catch(firmata::NotOpenException e) {
-            std::cout << e.what() << std::endl;
-        }
-        if (f != NULL && f->ready()) {
-            break;
-        }
-    }
-
-    if (f == NULL || !f->ready()) {
-        cout << "Erro. Primeiramente, conecte o dispositivo numa porta USB e tente novamente." << endl;
-        return 1;
-    }
 
     if (parser.get<bool>("help"))
     {
@@ -112,8 +72,8 @@ int main(int argc, char** argv)
         int cameraDevice = parser.get<int>("camera_device");
         cap = VideoCapture(cameraDevice);
 
-        cap.set(CV_CAP_PROP_FRAME_WIDTH , 320);
-        cap.set(CV_CAP_PROP_FRAME_HEIGHT , 240);
+        cap.set(CV_CAP_PROP_FRAME_WIDTH , 640);
+        cap.set(CV_CAP_PROP_FRAME_HEIGHT , 480);
 
         if(!cap.isOpened())
         {
@@ -198,9 +158,6 @@ int main(int argc, char** argv)
                 Point p1(cvRound(x_center - width / 2), cvRound(y_center - height / 2));
                 Point p2(cvRound(x_center + width / 2), cvRound(y_center + height / 2));
                 Rect object(p1, p2);
-#if DEBUG
-                cout << "Width: " << width << "\t" << "Height: " << height << endl;
-#endif
 
                 Scalar object_roi_color(0, 255, 0);
 
@@ -230,15 +187,8 @@ int main(int argc, char** argv)
             }
         }
 
-        imshow("L2: People detection", frame);
+        imshow("People detection", frame);
         if (waitKey(1) == 27) break;
-        if (f == NULL || !f->ready()) break;
-    }
-
-    if(f != NULL)
-    {
-        delete f;
-        f = NULL;
     }
 
     cap.release();
@@ -250,33 +200,6 @@ int main(int argc, char** argv)
 
 void *hardware_worker(void *data)
 {
-    try {
-        f->setSamplingInterval(100);
-
-        //std::cout << f->name << std::endl;
-        //std::cout << f->major_version << std::endl;
-        //std::cout << f->minor_version << std::endl;
-
-        f->pinMode(13, MODE_OUTPUT);
-
-        for(int i = 0; i < 6; i++) {
-            f->parse();
-            int a0 = f->digitalRead(13);
-            f->digitalWrite(13, a0? LOW : HIGH);
-            sleep(1);
-        };
-    }
-    catch (firmata::IOException e) {
-        std::cout << e.what() << std::endl;
-        delete f;
-        f = NULL;
-    }
-    catch (firmata::NotOpenException e) {
-        std::cout << e.what() << std::endl;
-        delete f;
-        f = NULL;
-    }
-
     sleep(SLEEP_TIME);
     hardware_flag = true;
 }

@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/gabriel/Projetos/vitrine/main.cpp" "/home/gabriel/Projetos/vitrine/cmake-build-debug/CMakeFiles/vitrine.dir/main.cpp.o"
+  "/home/gabriel/Projetos/darknet-people-detection/main.cpp" "/home/gabriel/Projetos/darknet-people-detection/cmake-build-debug/CMakeFiles/vitrine.dir/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
